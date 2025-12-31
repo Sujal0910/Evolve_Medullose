@@ -14,13 +14,25 @@ from datetime import datetime, time, date
 load_dotenv()
 app = Flask(__name__)
 
+
 # --- Configurations ---
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'a_very_strong_default_secret_key_12345')
+
 # Use Flask's instance path for the database
 instance_path = os.path.join(app.instance_path)
 os.makedirs(instance_path, exist_ok=True)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(instance_path, 'medconnect.db')
 
+# Get the database URL from environment
+db_url = os.environ.get('DATABASE_URL')
+
+if db_url:
+    # FIX: Render uses "postgres://" but SQLAlchemy needs "postgresql://"
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+else:
+    # Fallback to local SQLite if no database URL is present
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(instance_path, 'medconnect.db')
 # --- Extensions ---
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
