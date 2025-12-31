@@ -353,7 +353,6 @@ def landing():
 @login_required
 def dashboard():
     """This is the new 'homepage' after logging in."""
-    # --- THIS IS THE FIX ---
     return redirect(url_for('chat')) # Go to the chat page
 
 @app.route('/chat')
@@ -449,9 +448,13 @@ def article_detail(article_id):
 def get_openrouter_response(messages):
     try:
         completion = client.chat.completions.create(
-            model="openai/gpt-oss-20b:free", 
+            model="google/gemma-3n-e2b-it:free", # Using the requested model
             messages=messages,
             max_tokens=1024,
+            extra_headers={
+                "HTTP-Referer": "http://localhost:5000", 
+                "X-Title": "Medullose App",
+            },
         )
         return completion.choices[0].message.content
     except Exception as e:
@@ -465,6 +468,7 @@ def get_history():
     history_list = [{"role": msg.role, "content": msg.content} for msg in history]
     return jsonify(history_list)
 
+# --- REFACTORED ASK ROUTE (FIXES 400 ERROR) ---
 @app.route('/ask', methods=['POST'])
 @login_required
 def ask():
@@ -472,84 +476,103 @@ def ask():
     if not user_message_content:
         return jsonify({"error": "No message provided"}), 400
 
+    # 1. Save User Message IMMEDIATELLY to prevent DB locks
     user_message = ChatHistory(role='user', content=user_message_content, author=current_user)
-    db.session.add(user_message)
+    try:
+        db.session.add(user_message)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error saving user message: {e}")
+        return jsonify({"error": "Failed to save message"}), 500
     
+    # 2. Prepare Context
+    recent_history = ChatHistory.query.filter_by(user_id=current_user.id).order_by(ChatHistory.timestamp.desc()).limit(10).all()
+    recent_history.reverse() 
+    
+    # --- FIX: Changed role from 'system' to 'user' because Gemma rejects 'system' ---
     system_prompt = {
-        "role": "system",
+        "role": "user", 
         "content": (
+            "INSTRUCTIONS:\n"
             "You have two tasks. First, be a helpful medical AI. Second, be a reminder assistant."
             "\n\n**TASK 1: Medical AI**"
             "\n- **YOUR MOST IMPORTANT RULE:** You MUST refuse to answer any questions that are not related to health, medicine, wellness, or symptoms. "
             "If the user asks about anything else, you must politely decline."
             "\n- Your persona: You are 'Medullose AI'. You are NOT a doctor and must NEVER provide a diagnosis. "
             "Always end your (health-related) response with a clear, friendly disclaimer: 'Please remember, I am an AI, not a medical professional. It's always best to consult a doctor for a proper diagnosis.'"
-            
             "\n\n**TASK 2: Reminder Assistant**"
             "\n- If the user asks to set a medicine reminder, your goal is to collect three pieces of information: `medicine_name`, `dosage` (optional), and `time` (in 24-hour HH:MM format)."
             "\n- Ask for any missing information."
             "\n- Once you have the required info, you **MUST** respond *only* with a special JSON-like string and nothing else."
             "\n- **JSON Format:** `{\"action\": \"create_reminder\", \"medicine\": \"...\", \"dosage\": \"...\", \"time\": \"HH:MM\"}`"
+            "\n\n(Acknowledge these instructions and wait for the user query below.)"
         )
     }
     
-    recent_history = ChatHistory.query.filter_by(user_id=current_user.id).order_by(ChatHistory.timestamp.desc()).limit(10).all()
-    recent_history.reverse() 
-    
     messages = [system_prompt] + [{"role": msg.role, "content": msg.content} for msg in recent_history]
-    messages.append({"role": "user", "content": user_message_content})
+    
+    # Ensure current message is in context
+    if not recent_history or recent_history[-1].content != user_message_content:
+         messages.append({"role": "user", "content": user_message_content})
 
+    # 3. Get AI Response
     ai_response_content = get_openrouter_response(messages)
     
+    # 4. Handle Logic (Reminders)
     try:
-        data = json.loads(ai_response_content)
-        
-        if data.get('action') == 'create_reminder':
-            med_name = data.get('medicine')
-            dosage = data.get('dosage')
-            time_str = data.get('time')
+        # Simple check to see if it looks like JSON before parsing
+        if "create_reminder" in ai_response_content:
+            try:
+                data = json.loads(ai_response_content)
+                if data.get('action') == 'create_reminder':
+                    med_name = data.get('medicine')
+                    dosage = data.get('dosage')
+                    time_str = data.get('time')
 
-            if dosage == "None":
-                dosage = None 
-            
-            if not med_name or not time_str:
-                ai_response_content = "I'm sorry, I missed some of those details. Could you please provide the medicine name and time again?"
-            else:
-                try:
-                    reminder_time_obj = time.fromisoformat(time_str)
+                    if dosage == "None":
+                        dosage = None 
                     
-                    new_reminder = Reminder(
-                        medicine_name=med_name,
-                        dosage=dosage,
-                        reminder_time=reminder_time_obj,
-                        author=current_user
-                    )
-                    db.session.add(new_reminder)
-                    
-                    time_friendly = reminder_time_obj.strftime('%I:%M %p') 
-                    dosage_text = f" ({dosage})" if dosage else ""
-                    ai_response_content = f"OK, I've set a reminder for {med_name}{dosage_text} at {time_friendly}. You can see all your reminders on the 'Reminders' page."
-
-                except ValueError:
-                    ai_response_content = f"I'm sorry, I couldn't understand the time '{time_str}'. Please provide it in 24-hour HH:MM format (e.g., 08:00 for 8 AM or 20:00 for 8 PM)."
-                except Exception as e:
-                    db.session.rollback()
-                    app.logger.error(f"Error creating reminder from AI: {e}")
-                    ai_response_content = "I'm sorry, I had trouble saving that reminder. Please try again or use the manual form on the 'Reminders' page."
+                    if not med_name or not time_str:
+                        ai_response_content = "I'm sorry, I missed some of those details. Could you please provide the medicine name and time again?"
+                    else:
+                        reminder_time_obj = time.fromisoformat(time_str)
+                        
+                        new_reminder = Reminder(
+                            medicine_name=med_name,
+                            dosage=dosage,
+                            reminder_time=reminder_time_obj,
+                            author=current_user
+                        )
+                        db.session.add(new_reminder)
+                        db.session.commit()
+                        
+                        time_friendly = reminder_time_obj.strftime('%I:%M %p') 
+                        dosage_text = f" ({dosage})" if dosage else ""
+                        ai_response_content = f"OK, I've set a reminder for {med_name}{dosage_text} at {time_friendly}. You can see all your reminders on the 'Reminders' page."
+            except (ValueError, Exception) as e:
+                # If reminder creation fails, just log it and fallback to the text response
+                db.session.rollback()
+                app.logger.error(f"Error handling reminder logic: {e}")
+                if isinstance(e, ValueError):
+                     ai_response_content = f"I'm sorry, I couldn't understand the time format. Please use HH:MM."
 
     except (json.JSONDecodeError, TypeError):
         pass
     
+    # 5. Save AI Response
     ai_message = ChatHistory(role='assistant', content=ai_response_content, author=current_user)
     
     try:
+        db.session.add(ai_message) 
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error saving chat history: {e}")
-        return jsonify({"error": "Could not save chat history"}), 500
+        return jsonify({"answer": ai_response_content})
 
     return jsonify({"answer": ai_response_content})
+
 
 @app.route('/clear_chat', methods=['POST'])
 @login_required
