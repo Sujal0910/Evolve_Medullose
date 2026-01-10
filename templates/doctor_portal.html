@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Doctor Portal{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-12 max-w-4xl">
+    <div class="text-center mb-10">
+        <h1 class="text-3xl font-bold text-brand-forest">Doctor Portal</h1>
+        <p class="text-brand-olive mt-2">Select your profile to access your dashboard.</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% if doctors %}
+            {% for doctor in doctors %}
+            <a href="{{ url_for('doctor_dashboard', doctor_id=doctor.id) }}" 
+               class="block bg-white p-6 rounded-lg shadow-md border border-brand-stone hover:shadow-xl hover:border-brand-forest transition transform hover:-translate-y-1 group">
+                
+                <div class="flex items-center space-x-4 mb-4">
+                    <div class="h-12 w-12 rounded-full bg-brand-forest text-white flex items-center justify-center text-xl font-bold group-hover:bg-brand-golden transition">
+                        Dr
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-800 group-hover:text-brand-forest">{{ doctor.name }}</h3>
+                        <p class="text-xs text-brand-golden font-semibold uppercase">{{ doctor.specialty }}</p>
+                    </div>
+                </div>
+                
+                <div class="text-center bg-brand-cream text-brand-forest py-2 rounded text-sm font-bold group-hover:bg-brand-forest group-hover:text-white transition">
+                    Login to Dashboard →
+                </div>
+            </a>
+            {% endfor %}
+        {% else %}
+            <div class="col-span-3 text-center py-12 bg-white rounded-lg border border-dashed border-gray-300">
+                <p class="text-gray-500">No doctors found. Please add doctors via the Admin Dashboard.</p>
+                <a href="{{ url_for('admin_dashboard') }}" class="text-blue-600 hover:underline mt-2 inline-block">Go to Admin Dashboard</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

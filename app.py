@@ -1,3 +1,5 @@
+from PyPDF2 import PdfReader
+import io
 import os
 import markdown
 import json 
@@ -116,6 +118,8 @@ class Appointment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     appointment_datetime = db.Column(db.DateTime, nullable=False)
     reason = db.Column(db.String(300), nullable=True)
+    # NEW: Status field ('Scheduled', 'Patient Waiting', 'Completed')
+    status = db.Column(db.String(50), default='Scheduled') 
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     doctor_id = db.Column(db.Integer, db.ForeignKey('doctor.id'), nullable=False)
 
@@ -481,6 +485,7 @@ def get_history():
     return jsonify(history_list)
 
 # --- REFACTORED ASK ROUTE (FIXES 400 ERROR) ---
+# --- REFACTORED ASK ROUTE (FIXED PROMPT) ---
 @app.route('/ask', methods=['POST'])
 @login_required
 def ask():
@@ -488,7 +493,7 @@ def ask():
     if not user_message_content:
         return jsonify({"error": "No message provided"}), 400
 
-    # 1. Save User Message IMMEDIATELLY to prevent DB locks
+    # 1. Save User Message
     user_message = ChatHistory(role='user', content=user_message_content, author=current_user)
     try:
         db.session.add(user_message)
@@ -499,26 +504,22 @@ def ask():
         return jsonify({"error": "Failed to save message"}), 500
     
     # 2. Prepare Context
-    recent_history = ChatHistory.query.filter_by(user_id=current_user.id).order_by(ChatHistory.timestamp.desc()).limit(10).all()
+    recent_history = ChatHistory.query.filter_by(user_id=current_user.id).order_by(ChatHistory.timestamp.desc()).limit(6).all()
     recent_history.reverse() 
     
-    # --- FIX: Changed role from 'system' to 'user' because Gemma rejects 'system' ---
+    # --- FIXED PROMPT STRATEGY ---
+    # We remove the complex "Task 1 vs Task 2" language that confused the AI.
     system_prompt = {
         "role": "user", 
         "content": (
-            "INSTRUCTIONS:\n"
-            "You have two tasks. First, be a helpful medical AI. Second, be a reminder assistant."
-            "\n\n**TASK 1: Medical AI**"
-            "\n- **YOUR MOST IMPORTANT RULE:** You MUST refuse to answer any questions that are not related to health, medicine, wellness, or symptoms. "
-            "If the user asks about anything else, you must politely decline."
-            "\n- Your persona: You are 'Medullose AI'. You are NOT a doctor and must NEVER provide a diagnosis. "
-            "Always end your (health-related) response with a clear, friendly disclaimer: 'Please remember, I am an AI, not a medical professional. It's always best to consult a doctor for a proper diagnosis.'"
-            "\n\n**TASK 2: Reminder Assistant**"
-            "\n- If the user asks to set a medicine reminder, your goal is to collect three pieces of information: `medicine_name`, `dosage` (optional), and `time` (in 24-hour HH:MM format)."
-            "\n- Ask for any missing information."
-            "\n- Once you have the required info, you **MUST** respond *only* with a special JSON-like string and nothing else."
-            "\n- **JSON Format:** `{\"action\": \"create_reminder\", \"medicine\": \"...\", \"dosage\": \"...\", \"time\": \"HH:MM\"}`"
-            "\n\n(Acknowledge these instructions and wait for the user query below.)"
+            "You are Medullose, a helpful and empathetic medical AI assistant.\n"
+            "CORE RULES:\n"
+            "1. Answer health questions in detail. Always end health advice with: 'Disclaimer: I am an AI, not a doctor. Please consult a professional.'\n"
+            "2. IGNORE non-health topics politely.\n"
+            "3. SILENT TRIGGER: If the user asks to set a reminder for medicine, you must output a JSON object. \n"
+            "   - Format: {\"action\": \"create_reminder\", \"medicine\": \"...\", \"dosage\": \"...\", \"time\": \"HH:MM\"}\n"
+            "   - If details (medicine, dosage, time) are missing, ask for them naturally like a human.\n"
+            "   - DO NOT mention the word 'JSON' or 'Reminder Assistant' to the user. Just ask the question.\n"
         )
     }
     
@@ -533,43 +534,49 @@ def ask():
     
     # 4. Handle Logic (Reminders)
     try:
-        # Simple check to see if it looks like JSON before parsing
-        if "create_reminder" in ai_response_content:
-            try:
-                data = json.loads(ai_response_content)
-                if data.get('action') == 'create_reminder':
-                    med_name = data.get('medicine')
-                    dosage = data.get('dosage')
-                    time_str = data.get('time')
+        # Check if the AI decided to trigger a reminder
+        if "create_reminder" in ai_response_content and "{" in ai_response_content:
+            # Extract JSON substring in case the AI added extra text
+            start_index = ai_response_content.find('{')
+            end_index = ai_response_content.rfind('}') + 1
+            json_str = ai_response_content[start_index:end_index]
+            
+            data = json.loads(json_str)
+            
+            if data.get('action') == 'create_reminder':
+                med_name = data.get('medicine')
+                dosage = data.get('dosage')
+                time_str = data.get('time')
 
-                    if dosage == "None":
-                        dosage = None 
-                    
-                    if not med_name or not time_str:
-                        ai_response_content = "I'm sorry, I missed some of those details. Could you please provide the medicine name and time again?"
-                    else:
-                        reminder_time_obj = time.fromisoformat(time_str)
-                        
+                if not med_name or not time_str:
+                    ai_response_content = "I need the medicine name and time to set the reminder."
+                else:
+                    # Clean up time format if needed
+                    try:
+                        # Try to handle common time formats the AI might output
+                        if "PM" in time_str.upper() or "AM" in time_str.upper():
+                             reminder_time_obj = datetime.strptime(time_str, '%I:%M %p').time()
+                        else:
+                             reminder_time_obj = time.fromisoformat(time_str)
+                             
                         new_reminder = Reminder(
                             medicine_name=med_name,
-                            dosage=dosage,
+                            dosage=dosage if dosage != "None" else None,
                             reminder_time=reminder_time_obj,
                             author=current_user
                         )
                         db.session.add(new_reminder)
                         db.session.commit()
                         
-                        time_friendly = reminder_time_obj.strftime('%I:%M %p') 
-                        dosage_text = f" ({dosage})" if dosage else ""
-                        ai_response_content = f"OK, I've set a reminder for {med_name}{dosage_text} at {time_friendly}. You can see all your reminders on the 'Reminders' page."
-            except (ValueError, Exception) as e:
-                # If reminder creation fails, just log it and fallback to the text response
-                db.session.rollback()
-                app.logger.error(f"Error handling reminder logic: {e}")
-                if isinstance(e, ValueError):
-                     ai_response_content = f"I'm sorry, I couldn't understand the time format. Please use HH:MM."
+                        time_friendly = reminder_time_obj.strftime('%I:%M %p')
+                        dosage_text = f" ({dosage})" if dosage and dosage != "None" else ""
+                        ai_response_content = f"Done! I've set a reminder for {med_name}{dosage_text} at {time_friendly}."
+                    except ValueError:
+                        ai_response_content = "I understood the medicine, but I couldn't read the time. Please try again using HH:MM format."
 
-    except (json.JSONDecodeError, TypeError):
+    except (json.JSONDecodeError, TypeError, Exception) as e:
+        # If JSON parsing fails, just output the raw text (it was probably a normal chat message)
+        app.logger.error(f"Processed as normal chat (not JSON): {e}")
         pass
     
     # 5. Save AI Response
@@ -584,8 +591,6 @@ def ask():
         return jsonify({"answer": ai_response_content})
 
     return jsonify({"answer": ai_response_content})
-
-
 @app.route('/clear_chat', methods=['POST'])
 @login_required
 def clear_chat():
@@ -767,7 +772,189 @@ def secret_init_db():
             return f"An error occurred: {e}"
     else:
         return "Not authorized.", 403
+# --- Emergency Route ---
+@app.route('/emergency')
+def emergency():
+    # You can add logic here to find the nearest hospital if you want later
+    return render_template('emergency.html', title='Emergency - SOS')
+# --- Health Prediction Routes ---
+@app.route('/health_prediction')
+@login_required
+def health_prediction():
+    return render_template('health_prediction.html', title='AI Health Predictor')
 
+@app.route('/api/predict_health', methods=['POST'])
+@login_required
+def predict_health():
+    data = request.json
+    p_type = data.get('type') # heart, kidney, or lung
+    inputs = data.get('inputs')
+
+    # Construct a specific prompt for the AI based on the organ
+    prompt_content = f"""
+    You are an expert medical AI assistant. Analyze the following patient data for {p_type} health.
+    
+    Patient Data:
+    {json.dumps(inputs, indent=2)}
+    
+    Task:
+    1. Assess the risk level (Low, Moderate, High).
+    2. Explain WHY based on the provided numbers.
+    3. Provide 3 specific lifestyle recommendations.
+    
+    IMPORTANT:
+    - Keep the language simple and empathetic.
+    - formatting: Use Markdown (bolding, lists).
+    - DISCLAIMER: You MUST start by saying: "This is an AI assessment, not a medical diagnosis."
+    """
+
+    messages = [
+        {"role": "user", "content": prompt_content}
+    ]
+
+    # Re-use your existing AI function
+    ai_response = get_openrouter_response(messages)
+    
+    return jsonify({"analysis": ai_response})
+# --- PDF Report Analyzer Routes ---
+@app.route('/upload_report')
+@login_required
+def upload_report():
+    return render_template('upload_report.html', title='Analyze Medical Report')
+
+@app.route('/api/analyze_report', methods=['POST'])
+@login_required
+def analyze_report():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+        
+    if file and file.filename.endswith('.pdf'):
+        try:
+            # Read PDF from memory
+            pdf_file = io.BytesIO(file.read())
+            reader = PdfReader(pdf_file)
+            text = ""
+            
+            # Extract text from all pages
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+            
+            # Truncate text if it's too long for the AI (limit to ~3000 chars)
+            if len(text) > 3000:
+                text = text[:3000] + "...[truncated]"
+
+            # Send to AI
+            prompt_content = f"""
+            You are a helpful medical assistant. The user has uploaded a medical report. 
+            Please analyze the extracted text below and summarize the key findings in simple, easy-to-understand language.
+            
+            EXTRACTED REPORT TEXT:
+            {text}
+            
+            INSTRUCTIONS:
+            1. Identify the type of test (e.g., Blood Test, MRI).
+            2. Highlight any values that seem outside the normal range (if visible).
+            3. Explain what these results usually mean in plain English.
+            4. End with the standard disclaimer: "I am an AI. Please show this report to your doctor for a real diagnosis."
+            """
+            
+            messages = [{"role": "user", "content": prompt_content}]
+            ai_response = get_openrouter_response(messages)
+            
+            return jsonify({"analysis": ai_response})
+            
+        except Exception as e:
+            app.logger.error(f"Error reading PDF: {e}")
+            return jsonify({"error": "Could not read the PDF file. It might be encrypted or scanned image-only."}), 500
+            
+    return jsonify({"error": "Invalid file type. Please upload a PDF."}), 400
+
+@app.route('/video_consultation')
+@login_required
+def video_consultation():
+    room_name = request.args.get('room')
+    
+    # TRIGGER NOTIFICATION LOGIC
+    if room_name and room_name.startswith('Appointment-'):
+        try:
+            # Extract ID from "Appointment-5"
+            appt_id = int(room_name.split('-')[1])
+            appointment = db.session.get(Appointment, appt_id)
+            
+            # If the current user is the PATIENT, update status to "Waiting"
+            if appointment and appointment.user_id == current_user.id:
+                appointment.status = 'Patient Waiting'
+                db.session.commit()
+                print(f"NOTIFICATION: Patient {current_user.name} is waiting in room {room_name}")
+                
+        except Exception as e:
+            print(f"Error updating status: {e}")
+
+    return render_template('video_consultation.html', 
+                           title='Video Consultation', 
+                           user_name=current_user.name,
+                           auto_room=room_name)
+# --- Admin Routes ---
+@app.route('/admin')
+@login_required
+def admin_dashboard():
+    # In a real app, check if current_user.is_admin
+    doctors = Doctor.query.all()
+    return render_template('admin_dashboard.html', title='Admin Dashboard', doctors=doctors)
+
+@app.route('/admin/add_doctor', methods=['POST'])
+@login_required
+def add_doctor():
+    name = request.form.get('name')
+    specialty = request.form.get('specialty')
+    address = request.form.get('address')
+    phone = request.form.get('phone')
+    # Default lat/lng for now if not provided (Lucknow center)
+    lat = 26.8467
+    lng = 80.9462
+    
+    new_doc = Doctor(name=name, specialty=specialty, address=address, phone=phone, latitude=lat, longitude=lng)
+    db.session.add(new_doc)
+    db.session.commit()
+    flash('New Doctor Added Successfully!', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/delete_doctor/<int:id>')
+@login_required
+def delete_doctor(id):
+    doc = db.session.get(Doctor, id)
+    if doc:
+        db.session.delete(doc)
+        db.session.commit()
+        flash('Doctor deleted.', 'info')
+    return redirect(url_for('admin_dashboard'))
+# --- Doctor Portal Routes ---
+
+@app.route('/doctor_portal')
+@login_required
+def doctor_portal():
+    """Simulates a login screen for doctors."""
+    doctors = Doctor.query.all()
+    return render_template('doctor_portal.html', title='Doctor Portal', doctors=doctors)
+
+@app.route('/doctor/dashboard/<int:doctor_id>')
+@login_required
+def doctor_dashboard(doctor_id):
+    """The specific dashboard for a doctor to see their appointments."""
+    doctor = db.session.get(Doctor, doctor_id)
+    if not doctor:
+        flash("Doctor not found", "danger")
+        return redirect(url_for('doctor_portal'))
+        
+    # Get appointments for this doctor, sorted by time
+    appointments = Appointment.query.filter_by(doctor_id=doctor_id).order_by(Appointment.appointment_datetime).all()
+    
+    return render_template('doctor_dashboard.html', title=f'Dr. {doctor.name} - Dashboard', doctor=doctor, appointments=appointments)
 # --- Main Run ---
 if __name__ == '__main__':
     app.run(debug=True)

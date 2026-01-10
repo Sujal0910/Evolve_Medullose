@@ -1,114 +1,101 @@
 <!DOCTYPE html>
-<!-- "Cozy Rustic Neutrals" Light Theme -->
 <html lang="en" class="h-full bg-brand-cream"> 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- Tailwind CSS -->
+    <title>{% block title %}Medullose{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    // "Cozy Rustic Neutrals" palette
                     colors: {
-                        'brand-cream': '#fefae0',   // Main background
-                        'brand-golden': '#dda15e',  // Secondary accent
-                        'brand-olive': '#606c38',   // Body text
-                        'brand-forest': '#283618',  // Navbar bg & Headings
+                        'brand-cream': '#fefae0',
+                        'brand-golden': '#dda15e',
+                        'brand-olive': '#606c38',
+                        'brand-forest': '#283618',
+                        'brand-stone': '#bcb8b1',
                     }
                 }
             },
-            plugins: [
-                tailwind.plugins.typography,
-            ],
+            plugins: [ tailwind.plugins.typography ],
         }
     </script>
     <script src="https://cdn.tailwindcss.com/3.4.3?plugins=typography"></script>
     
-    <!-- Leaflet.js (Free Map) CSS & JS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-         crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-         crossorigin=""></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- Marked.js (for Chat Markdown) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://meet.ffmuc.net/external_api.js"></script>
 
-    <!-- Three.js (for 3D visuals) -->
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
-            }
-        }
-    </script>
-
-    <title>{% block title %}Medullose{% endblock %}</title>
-    
     <style>
-        /* ... (all your existing <style> code) ... */
         #chat-window::-webkit-scrollbar { width: 8px; }
         #chat-window::-webkit-scrollbar-track { background: #ffffff; }
         #chat-window::-webkit-scrollbar-thumb { background-color: #bcb8b1; border-radius: 20px; border: 3px solid #ffffff; }
         .prose-custom { color: #283618; }
         .prose-custom h1, .prose-custom h2, .prose-custom h3, .prose-custom strong { color: #283618; }
         .prose-custom ul > li::before { background-color: #606c38; }
-        .prose-custom a { color: #2563eb; }
-        .prose-custom blockquote { color: #606c38; border-left-color: #dda15e; }
-        #map { height: 400px; width: 100%; border-radius: 0.5rem; z-index: 10; }
+        .prose-custom a { color: #dda15e; }
+        
+        /* Map Container Height */
+        #map { height: 400px; width: 100%; z-index: 10; border-radius: 0.5rem; border: 2px solid #bcb8b1; }
     </style>
 </head>
-<body class="h-full flex flex-col font-sans text-brand-olive antialiased">
+<body class="h-full flex flex-col font-sans text-brand-olive antialiased bg-brand-cream">
 
-    <!-- Re-skinned Navbar -->
-    <header class="bg-brand-forest shadow-lg w-full">
+    <header class="bg-brand-forest shadow-lg w-full sticky top-0 z-50">
         <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
-                <!-- 
-                  **** THIS IS THE FIX ****
-                  Replaced the SVG with your new <img> tag
-                -->
-                <div class="flex-shrink-0 flex items-center">
+                <a href="/" class="flex-shrink-0 flex items-center">
                     <img src="{{ url_for('static', filename='images/logo-removebg-preview.png') }}" alt="Medullose Logo" class="h-10 w-auto">
                     <span class="text-brand-cream text-xl font-semibold ml-2">Medullose</span>
-                </div>
+                </a>
                 
-                <!-- Navigation Links (Center) -->
                 <div class="hidden md:flex md:items-center md:space-x-1">
-                    <a href="{{ url_for('chat') }}" class="text-brand-cream hover:bg-brand-olive hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">Chat</a>
-                    <a href="{{ url_for('library') }}" class="text-brand-cream hover:bg-brand-olive hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">Library</a>
-                    <a href="{{ url_for('reminders') }}" class="text-brand-cream hover:bg-brand-olive hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">Reminders</a>
-                    <a href="{{ url_for('find_doctors') }}" class="text-brand-cream hover:bg-brand-olive hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">Find a Doctor</a>
-                    <a href="{{ url_for('my_appointments') }}" class="text-brand-cream hover:bg-brand-olive hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">My Appointments</a>
-                    <a href="#" id="clear-chat-btn" class="text-brand-cream opacity-70 hover:bg-brand-olive hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">Clear Chat</a>
+                    {% for item in [
+                        ('Chat', 'chat'),
+                        ('Library', 'library'),
+                        ('Reminders', 'reminders'),
+                        ('Doctors', 'find_doctors'),
+                        ('Analyze Report', 'upload_report'),
+                        ('Appointments', 'my_appointments'),
+                        ('Video', 'video_consultation'),
+                        ('Predictor', 'health_prediction')
+                    ] %}
+                    <a href="{{ url_for(item[1]) }}" class="text-brand-cream hover:bg-brand-olive hover:bg-opacity-20 px-3 py-2 rounded-md text-sm font-medium">
+                        {{ item[0] }}
+                    </a>
+                    {% endfor %}
                 </div>
 
-                <!-- User Info & Logout (Right) -->
-                <div class="flex items-center">
-                    <span class="text-brand-cream opacity-70 text-sm mr-4 hidden sm:block">Welcome, {{ current_user.name }}</span>
-                    <a href="{{ url_for('logout') }}" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm font-medium">Logout</a>
+                <div class="flex items-center gap-3">
+                    <a href="{{ url_for('doctor_portal') }}" class="hidden lg:block text-brand-golden hover:text-white px-3 py-2 text-xs font-bold border border-brand-golden rounded">
+                        DOCTOR LOGIN
+                    </a>
+                    <a href="{{ url_for('emergency') }}" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm font-bold animate-pulse">
+                        SOS
+                    </a>
+                    <a href="{{ url_for('logout') }}" class="text-brand-cream opacity-70 hover:opacity-100 px-3 py-2 text-sm font-medium">
+                        Logout
+                    </a>
                 </div>
             </div>
         </nav>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="flex-1 overflow-y-auto bg-brand-cream">
-        <!-- Flash messages -->
+    <main class="flex-1 overflow-y-auto relative" style="background:rgb(59, 130, 246 / 50%) ;">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="container mx-auto max-w-4xl p-4">
+                <div class="container mx-auto max-w-4xl p-4 absolute top-0 left-0 right-0 z-40">
                     {% for category, message in messages %}
-                        <div class="p-4 rounded-md mb-4
-                            {% if category == 'success' %} bg-green-100 border border-green-200 text-green-800
-                            {% elif category == 'danger' %} bg-red-100 border border-red-200 text-red-800
-                            {% else %} bg-blue-100 border border-blue-200 text-blue-800
-                            {% endif %}">
+                        <div class="p-4 rounded-md mb-4 shadow-md
+                            {% if category == 'success' %} bg-green-100 border-l-4 border-green-500 text-green-700
+                            {% elif category == 'danger' %} bg-red-100 border-l-4 border-red-500 text-red-700
+                            {% else %} bg-blue-100 border-l-4 border-blue-500 text-blue-700 {% endif %}">
                             {{ message }}
                         </div>
                     {% endfor %}

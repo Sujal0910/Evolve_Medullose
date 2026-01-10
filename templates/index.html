@@ -1,33 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}Chat - Medullose{% endblock %}
 
 {% block content %}
-<!-- NEW: Light-mode container -->
-<div class="flex-1 flex flex-col h-full p-4 md:p-8 lg:p-12" style="height: calc(100vh - 64px);">
+<div class="flex-1 flex flex-col h-full p-4 md:p-8 lg:p-12 " style="height: calc(100vh - 64px);">
     
-    <!-- Chat Window -->
-    <!-- NEW: Re-skinned for light-mode. bg-white, shadow-lg, border-brand-stone -->
-    <div id="chat-window" class="flex-1 bg-white rounded-lg shadow-lg overflow-y-auto p-6 space-y-4 mb-4 border border-brand-stone border-opacity-20">
-        <!-- 
-          Chat messages will be dynamically injected here.
-          The 'Welcome' message will be added by the loadHistory() script.
-        -->
-    </div>
+    <div id="chat-window" class="flex-1 bg-[#EBF4DD] rounded-lg shadow-lg overflow-y-auto p-6 space-y-4 mb-4 border border-brand-stone border-opacity-50">
+        </div>
 
-    <!-- Loading Indicator -->
     <div id="loading-indicator" class="hidden flex items-center justify-center mb-2 space-x-2">
-        <!-- NEW: Re-skinned for light-mode -->
-        <span class="text-sm text-brand-olive">Medullose is thinking...</span>
+        <span class="text-sm text-brand-olive font-semibold">Medullose is thinking...</span>
         <div class="h-2 w-2 bg-brand-olive rounded-full animate-bounce" style="animation-delay: -0.3s;"></div>
         <div class="h-2 w-2 bg-brand-olive rounded-full animate-bounce" style="animation-delay: -0.15s;"></div>
         <div class="h-2 w-2 bg-brand-olive rounded-full animate-bounce"></div>
     </div>
 
-    <!-- 
-      Input Form 
-      NEW: Re-skinned for light-mode.
-    -->
     <form id="chat-form" 
           class="flex items-center space-x-3"
           data-ask-url="{{ url_for('ask') }}"
@@ -35,30 +22,24 @@
           data-clear-url="{{ url_for('clear_chat') }}"
           data-user-name="{{ current_user.name }}">
         
-        <!-- NEW: bg-white, border-brand-stone, text-brand-forest -->
-        <input type="text" id="message-input" placeholder="Type your symptoms here..." autocomplete="off" class="flex-1 p-3 bg-white border border-brand-stone rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-brand-forest" autofocus>
+        <button type="button" id="clear-chat-btn" class="p-3 bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 rounded-lg transition" title="Clear History">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+        </button>
+
+        <input type="text" id="message-input" 
+               placeholder="Type your symptoms here..." 
+               autocomplete="off" 
+               class="flex-1 p-3 bg-white border border-brand-stone rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-olive text-brand-forest placeholder-brand-stone" autofocus>
         
-        <!-- NEW: Blue button (as requested) -->
         <button type="submit" id="send-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-200 ease-in-out">
             Send
         </button>
     </form>
 </div>
 
-<!-- Custom Modal for Errors -->
-<!-- NEW: Re-skinned for light-mode -->
-<div id="error-modal" class="hidden fixed inset-0 bg-brand-forest bg-opacity-75 flex items-center justify-center z-50 p-4">
-    <div class="bg-white p-6 rounded-lg shadow-2xl max-w-sm w-full">
-        <h3 class="text-xl font-bold text-red-600 mb-4">An Error Occurred</h3>
-        <p id="error-message-text" class="text-brand-olive mb-6">Something went wrong.</p>
-        <button id="close-modal-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg">
-            Close
-        </button>
-    </div>
-</div>
-
 <script>
-    // --- Get DOM Elements ---
     const chatWindow = document.getElementById('chat-window');
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
@@ -66,64 +47,38 @@
     const loadingIndicator = document.getElementById('loading-indicator');
     const clearChatBtn = document.getElementById('clear-chat-btn');
 
-    // Modal elements
-    const errorModal = document.getElementById('error-modal');
-    const errorMessageText = document.getElementById('error-message-text');
-    const closeModalBtn = document.getElementById('close-modal-btn');
-
-    // --- State & URLs ---
     const ASK_URL = chatForm.dataset.askUrl;
     const HISTORY_URL = chatForm.dataset.historyUrl;
     const CLEAR_URL = chatForm.dataset.clearUrl;
     const currentUserName = chatForm.dataset.userName;
 
-
-    // --- Helper Functions ---
-
-    /**
-     * Adds a message to the chat window.
-     * @param {string} sender - 'user' or 'assistant'
-     * @param {string} text - The message text
-     */
     function addMessageToChat(sender, text) {
         const messageDiv = document.createElement('div');
-        messageDiv.className = 'flex w-full';
+        messageDiv.className = 'flex w-full mb-3';
 
         const bubble = document.createElement('div');
-        // NEW: Added overflow-x-auto to fix table/code block overflow
-        bubble.className = 'max-w-xl p-3 rounded-lg shadow-md overflow-x-auto';
+        bubble.className = 'max-w-[85%] p-3 rounded-lg shadow-sm';
 
         if (sender === 'user') {
-            // --- NEW: User bubble styling (Blue) ---
+            // User: Blue Bubble
             messageDiv.classList.add('justify-end');
             bubble.classList.add('bg-blue-600', 'text-white');
             bubble.textContent = text;
         } else {
-            // --- NEW: Assistant bubble styling (Light Gray) ---
+            // Assistant: Rustic Gray/Greenish Bubble
             messageDiv.classList.add('justify-start');
-            bubble.classList.add('bg-gray-100', 'text-brand-forest');
+            bubble.classList.add('bg-gray-100', 'text-brand-forest', 'border', 'border-brand-stone', 'border-opacity-30');
             
-            // Use Marked.js to render Markdown, and add prose styles
+            // Markdown rendering
             bubble.innerHTML = marked.parse(text);
-            bubble.classList.add('prose', 'prose-custom'); 
+            bubble.classList.add('prose', 'prose-custom', 'prose-sm', 'max-w-none'); 
         }
 
         messageDiv.appendChild(bubble);
         chatWindow.appendChild(messageDiv);
-        scrollToBottom();
-    }
-
-    /**
-     * Scrolls the chat window to the bottom.
-     */
-    function scrollToBottom() {
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
-    /**
-     * Toggles the UI state between loading and idle.
-     * @param {boolean} isLoading - True if loading, false if idle
-     */
     function setLoading(isLoading) {
         if (isLoading) {
             loadingIndicator.classList.remove('hidden');
@@ -133,25 +88,12 @@
             loadingIndicator.classList.add('hidden');
             sendButton.disabled = false;
             sendButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            messageInput.focus();
         }
     }
 
-    /**
-     * Shows a custom, non-blocking error modal.
-     * @param {string} message - The error message to display
-     */
-    function showCustomError(message) {
-        errorMessageText.textContent = message;
-        errorModal.classList.remove('hidden');
-    }
-
-    // --- Event Handlers ---
-
-    /**
-     * Handles the chat form submission.
-     */
     async function handleChatSubmit(e) {
-        e.preventDefault(); // Stop page reload
+        e.preventDefault();
         const message = messageInput.value.trim();
         if (!message) return;
 
@@ -162,133 +104,40 @@
         try {
             const response = await fetch(ASK_URL, {
                 method: 'POST',
-                credentials: 'same-origin', // Send cookies
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: message }),
             });
-
-            // Check for non-JSON responses (like a login redirect)
-            const contentType = response.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                if(response.status === 500) {
-                     throw new Error("The server encountered an internal error. Please try again.");
-                } else {
-                     throw new Error("Your session has expired. Please log out and log back in.");
-                }
-            }
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'An unknown error occurred.');
-            }
-
             const data = await response.json();
+            if (data.error) throw new Error(data.error);
             addMessageToChat('assistant', data.answer);
-
         } catch (error) {
-            console.error('Error during fetch:', error);
-            showCustomError(error.message);
+            addMessageToChat('assistant', `**Error:** ${error.message}`);
         } finally {
             setLoading(false);
         }
     }
 
-    /**
-     * Fetches and loads the chat history.
-     */
     async function loadHistory() {
-        setLoading(true);
         try {
-            const response = await fetch(HISTORY_URL, {
-                method: 'GET',
-                credentials: 'same-origin' // Send cookies
-            });
-            
-            // Check for non-JSON responses
-            const contentType = response.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                throw new Error("Your session has expired. Please log out and log back in.");
-            }
-            
-            if (!response.ok) {
-                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to load history.');
-            }
-
+            const response = await fetch(HISTORY_URL);
             const history = await response.json();
-            
             if (history.length > 0) {
-                history.forEach(msg => {
-                    addMessageToChat(msg.role, msg.content);
-                });
+                history.forEach(msg => addMessageToChat(msg.role, msg.content));
             } else {
-                // Show welcome message if history is empty
-                addMessageToChat('assistant', `Welcome, ${currentUserName}! I'm Medullose. How can I help you today? \n\nI am an AI, not a doctor. Please consult a medical professional for any serious health concerns.`);
+                addMessageToChat('assistant', `Welcome, ${currentUserName}! Medullose is ready.`);
             }
-
-        } catch (error) {
-            console.error('Error loading history:', error);
-            showCustomError(error.message);
-        } finally {
-            setLoading(false);
-            scrollToBottom();
-        }
+        } catch (e) {}
     }
 
-    /**
-     * Handles the "Clear Chat" button click.
-     */
-    async function handleClearChat(e) {
-        e.preventDefault();
-        
-        // Use a simple, non-blocking confirm
-        if (!window.confirm("Are you sure you want to clear your entire chat history?")) {
-            return;
-        }
-        
-        try {
-            const response = await fetch(CLEAR_URL, {
-                method: 'POST',
-                credentials: 'same-origin' // Send cookies
-            });
-
-            const contentType = response.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                throw new Error("Your session has expired. Please log out and log back in.");
-            }
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to clear chat.');
-            }
-
-            // Clear chat window
-            chatWindow.innerHTML = '';
-            // Show new welcome message
-            addMessageToChat('assistant', `Welcome, ${currentUserName}! I'm Medullose. How can I help you today? \n\nI am an AI, not a doctor. Please consult a medical professional for any serious health concerns.`);
-
-        } catch (error) {
-            console.error('Error clearing chat:', error);
-            showCustomError(error.message);
-        }
+    async function handleClearChat() {
+        if (!confirm("Clear chat history?")) return;
+        await fetch(CLEAR_URL, { method: 'POST' });
+        chatWindow.innerHTML = '';
+        addMessageToChat('assistant', `Chat history cleared.`);
     }
 
-    // --- Attach Event Listeners ---
     chatForm.addEventListener('submit', handleChatSubmit);
-    
-    // Check if clearChatBtn exists (it's in base.html)
-    if(clearChatBtn) {
-        clearChatBtn.addEventListener('click', handleClearChat);
-    }
-    
-    closeModalBtn.addEventListener('click', () => {
-        errorModal.classList.add('hidden');
-    });
-
-    // --- Initial Load ---
+    if(clearChatBtn) clearChatBtn.addEventListener('click', handleClearChat);
     loadHistory();
-
 </script>
 {% endblock %}

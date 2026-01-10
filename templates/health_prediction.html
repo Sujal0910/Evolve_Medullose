@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}AI Health Prediction{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+    
+    <h1 class="text-3xl font-bold text-brand-forest mb-2 text-center">AI Health Predictor</h1>
+    <p class="text-center text-brand-olive mb-8">Select a category to get an AI-powered risk assessment.</p>
+
+    <div class="flex flex-wrap justify-center gap-4 mb-8">
+        <button onclick="showTab('heart')" id="tab-heart" class="tab-btn px-6 py-2 rounded-full font-semibold bg-brand-forest text-brand-cream shadow-lg transform scale-105 transition">
+            ❤️ Heart
+        </button>
+        <button onclick="showTab('kidney')" id="tab-kidney" class="tab-btn px-6 py-2 rounded-full font-semibold bg-white text-brand-forest border border-brand-forest hover:bg-brand-cream transition">
+            💧 Kidney
+        </button>
+        <button onclick="showTab('lung')" id="tab-lung" class="tab-btn px-6 py-2 rounded-full font-semibold bg-white text-brand-forest border border-brand-forest hover:bg-brand-cream transition">
+            🫁 Lungs
+        </button>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8">
+        
+        <div class="bg-white p-6 rounded-lg shadow-md border border-brand-stone">
+            
+            <form id="form-heart" class="prediction-form space-y-4">
+                <h3 class="text-xl font-bold text-brand-forest border-b pb-2">Heart Metrics</h3>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Age</label>
+                    <input type="number" name="Age" class="w-full p-2 border rounded" placeholder="e.g. 45">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Systolic BP (Top number)</label>
+                    <input type="number" name="Systolic_BP" class="w-full p-2 border rounded" placeholder="e.g. 120">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Cholesterol Level</label>
+                    <input type="number" name="Cholesterol" class="w-full p-2 border rounded" placeholder="e.g. 200">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Do you smoke?</label>
+                    <select name="Smoker" class="w-full p-2 border rounded">
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-brand-forest text-white font-bold py-2 px-4 rounded hover:bg-green-900 transition">Analyze Heart Health</button>
+            </form>
+
+            <form id="form-kidney" class="prediction-form space-y-4 hidden">
+                <h3 class="text-xl font-bold text-brand-forest border-b pb-2">Kidney Metrics</h3>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Daily Water Intake (Liters)</label>
+                    <input type="number" step="0.1" name="Water_Intake" class="w-full p-2 border rounded" placeholder="e.g. 2.5">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Blood Sugar Level</label>
+                    <input type="number" name="Blood_Sugar" class="w-full p-2 border rounded" placeholder="e.g. 100">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">History of Kidney Stones?</label>
+                    <select name="Kidney_Stones" class="w-full p-2 border rounded">
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition">Analyze Kidney Health</button>
+            </form>
+
+            <form id="form-lung" class="prediction-form space-y-4 hidden">
+                <h3 class="text-xl font-bold text-brand-forest border-b pb-2">Lung Metrics</h3>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Shortness of Breath?</label>
+                    <select name="Shortness_of_Breath" class="w-full p-2 border rounded">
+                        <option value="None">None</option>
+                        <option value="Mild">Mild (after exercise)</option>
+                        <option value="Severe">Severe (at rest)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Chronic Cough?</label>
+                    <select name="Cough" class="w-full p-2 border rounded">
+                        <option value="No">No</option>
+                        <option value="Yes, dry">Yes, dry</option>
+                        <option value="Yes, with phlegm">Yes, with phlegm</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Years Smoking (if any)</label>
+                    <input type="number" name="Smoking_Years" class="w-full p-2 border rounded" placeholder="0 if non-smoker">
+                </div>
+                <button type="submit" class="w-full bg-gray-600 text-white font-bold py-2 px-4 rounded hover:bg-gray-700 transition">Analyze Lung Health</button>
+            </form>
+        </div>
+
+        <div class="relative">
+            <div id="loading" class="hidden absolute inset-0 bg-white bg-opacity-80 z-10 flex flex-col items-center justify-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-forest"></div>
+                <p class="mt-2 text-brand-forest font-semibold">AI is analyzing...</p>
+            </div>
+            
+            <div id="result-box" class="bg-brand-cream p-6 rounded-lg shadow-inner h-full border border-brand-golden overflow-y-auto prose prose-sm max-w-none">
+                <h3 class="text-lg font-semibold text-gray-500 italic">Results will appear here...</h3>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // Tab Switching Logic
+    function showTab(type) {
+        // 1. Hide all forms
+        document.querySelectorAll('.prediction-form').forEach(el => el.classList.add('hidden'));
+        // 2. Reset all buttons
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('bg-brand-forest', 'text-brand-cream', 'shadow-lg', 'transform', 'scale-105');
+            btn.classList.add('bg-white', 'text-brand-forest', 'border');
+        });
+
+        // 3. Show selected form
+        document.getElementById('form-' + type).classList.remove('hidden');
+        // 4. Highlight selected button
+        const activeBtn = document.getElementById('tab-' + type);
+        activeBtn.classList.remove('bg-white', 'text-brand-forest', 'border');
+        activeBtn.classList.add('bg-brand-forest', 'text-brand-cream', 'shadow-lg', 'transform', 'scale-105');
+        
+        // Clear previous results
+        document.getElementById('result-box').innerHTML = '<h3 class="text-lg font-semibold text-gray-500 italic">Results will appear here...</h3>';
+    }
+
+    // Handle Form Submissions
+    ['heart', 'kidney', 'lung'].forEach(type => {
+        document.getElementById('form-' + type).addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            const resultBox = document.getElementById('result-box');
+            const loading = document.getElementById('loading');
+
+            loading.classList.remove('hidden'); // Show spinner
+
+            try {
+                const response = await fetch('/api/predict_health', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: type, inputs: data })
+                });
+                
+                const result = await response.json();
+                
+                // Render Markdown using marked.js (included in base.html)
+                resultBox.innerHTML = marked.parse(result.analysis);
+
+            } catch (error) {
+                resultBox.innerHTML = `<p class="text-red-600 font-bold">Error: ${error.message}</p>`;
+            } finally {
+                loading.classList.add('hidden'); // Hide spinner
+            }
+        });
+    });
+</script>
+{% endblock %}

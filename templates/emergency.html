@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}EMERGENCY SOS{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-[80vh] bg-red-50 p-6 text-center space-y-8">
+    
+    <div class="space-y-2">
+        <h1 class="text-4xl md:text-5xl font-extrabold text-red-600 tracking-wider">EMERGENCY SOS</h1>
+        <p class="text-lg text-red-800 font-medium">Do not panic. Help is a click away.</p>
+    </div>
+
+    <div class="relative group">
+        <div class="absolute -inset-1 bg-red-500 rounded-full opacity-75 blur animate-ping group-hover:opacity-100 transition duration-1000"></div>
+        
+        <a href="tel:108" class="relative flex items-center justify-center w-48 h-48 md:w-64 md:h-64 bg-red-600 rounded-full shadow-2xl hover:bg-red-700 hover:scale-105 transition transform duration-200 border-4 border-white">
+            <div class="flex flex-col items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 md:h-20 md:w-20 text-white mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                <span class="text-2xl md:text-3xl font-bold text-white">CALL 108</span>
+            </div>
+        </a>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow-lg border-l-4 border-red-500 max-w-md w-full">
+        <h3 class="text-xl font-bold text-gray-800 mb-2">Your Current Location</h3>
+        <p class="text-gray-600 text-sm mb-4">Read these coordinates to the operator if you are in an unmarked area.</p>
+        
+        <div id="location-box" class="space-y-2">
+            <p class="text-gray-500 animate-pulse">Locating satellites...</p>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Automatically get location on load
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(showPosition, showError);
+    } else {
+        document.getElementById("location-box").innerHTML = "<p class='text-red-500'>Geolocation is not supported by this browser.</p>";
+    }
+
+    function showPosition(position) {
+        const lat = position.coords.latitude.toFixed(5);
+        const lng = position.coords.longitude.toFixed(5);
+        const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+
+        document.getElementById("location-box").innerHTML = `
+            <div class="flex justify-between border-b pb-2">
+                <span class="font-semibold">Latitude:</span>
+                <span class="font-mono text-gray-800">${lat}</span>
+            </div>
+            <div class="flex justify-between border-b py-2">
+                <span class="font-semibold">Longitude:</span>
+                <span class="font-mono text-gray-800">${lng}</span>
+            </div>
+            <div class="pt-3 text-center">
+                <a href="${mapsUrl}" target="_blank" class="text-blue-600 underline text-sm hover:text-blue-800">View on Google Maps</a>
+            </div>
+        `;
+    }
+
+    function showError(error) {
+        let msg = "Unknown error.";
+        switch(error.code) {
+            case error.PERMISSION_DENIED: msg = "User denied the request for Geolocation."; break;
+            case error.POSITION_UNAVAILABLE: msg = "Location information is unavailable."; break;
+            case error.TIMEOUT: msg = "The request to get user location timed out."; break;
+        }
+        document.getElementById("location-box").innerHTML = `<p class='text-red-500 text-sm'>${msg}</p>`;
+    }
+</script>
+{% endblock %}

@@ -1,111 +1,82 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}Find a Doctor{% endblock %}
 
 {% block content %}
-<!-- NEW: Light-mode container -->
-<div class="container mx-auto max-w-5xl p-4 md:p-8 lg:p-12">
-    <!-- NEW: Re-skinned heading -->
-    <h1 class="text-3xl font-bold text-brand-forest mb-6">Find a Doctor</h1>
-
-    <!-- 
-      MAP CONTAINER
-      This div is styled by #map in base.html
-    -->
-    <div id="map" class="shadow-lg mb-8 border border-brand-stone border-opacity-20"></div>
-
-    <!-- Doctor List -->
-    <h2 class="text-2xl font-semibold text-brand-forest mb-6">Nearby Clinics & Hospitals</h2>
-    <div id="doctor-list" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Doctor cards will be dynamically injected here by the script -->
-        <p id="loading-doctors" class="text-brand-olive">Loading doctors...</p>
+<div class="container mx-auto px-4 py-8 max-w-6xl">
+    
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-brand-forest">Nearby Clinics & Hospitals</h1>
+        <p class="text-brand-olive mt-2">Find the best specialists near you.</p>
     </div>
+
+    <div id="map" class="shadow-lg mb-8 border-2 border-brand-stone border-opacity-50 rounded-lg h-96 w-full z-0" style="height: 400px;"></div>
+    
+    <div id="loading" class="text-center py-4">
+        <p class="text-brand-olive font-semibold animate-pulse">Loading doctors map...</p>
+    </div>
+
+    <div id="doctors-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 hidden">
+        </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        
-        // 1. Initialize the Map
-        const map = L.map('map').setView([26.7, 80.7], 10); // Centered on Lucknow/Unnao
+    document.addEventListener('DOMContentLoaded', async () => {
+        // 1. Initialize Map
+        // Default view: Lucknow/Unnao center
+        const map = L.map('map').setView([26.8467, 80.9462], 12);
 
-        // Add the OpenStreetMap "tile layer" (the map image)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        // --- NEW: Custom Map Pin Icon (Blue) ---
-        // Using a high-visibility blue as requested
-        const customIcon = L.divIcon({
-            html: `<svg class="w-8 h-8 text-blue-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                       <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
-                   </svg>`,
-            className: 'bg-transparent border-0',
-            iconSize: [32, 32],
-            iconAnchor: [16, 32] // Point of the icon
-        });
-        // --- End of Custom Icon ---
+        // 2. Fetch Doctors
+        try {
+            const response = await fetch('/api/get_doctors');
+            const doctors = await response.json();
+            
+            const loading = document.getElementById('loading');
+            const grid = document.getElementById('doctors-grid');
+            
+            loading.classList.add('hidden');
+            grid.classList.remove('hidden');
 
-        const doctorListEl = document.getElementById('doctor-list');
-        const loadingDoctorsEl = document.getElementById('loading-doctors');
-        const getDoctorsUrl = '{{ url_for("get_doctors") }}';
+            // Bounds to auto-zoom map
+            const markers = [];
 
-        // 2. Fetch Doctors from our API and Add to Map
-        async function loadDoctors() {
-            try {
-                const response = await fetch(getDoctorsUrl, {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to load doctor data.');
-                }
+            doctors.forEach(doc => {
+                // Add Pin
+                const marker = L.marker([doc.lat, doc.lng])
+                    .addTo(map)
+                    .bindPopup(`<b>${doc.name}</b><br>${doc.specialty}`);
+                markers.push(marker);
 
-                const doctors = await response.json();
-                
-                if (doctors.length === 0) {
-                    loadingDoctorsEl.textContent = 'No doctors found in the database.';
-                    return;
-                }
-
-                doctorListEl.innerHTML = ''; 
-
-                doctors.forEach(doctor => {
-                    // Add a pin to the map (using our new custom icon)
-                    L.marker([doctor.lat, doctor.lng], { icon: customIcon }).addTo(map)
-                        .bindPopup(`<b>${doctor.name}</b><br>${doctor.specialty}`);
-
-                    // Create the HTML "Doctor Card"
-                    // --- NEW: Re-skinned white card ---
-                    const card = document.createElement('div');
-                    card.className = 'bg-white p-6 rounded-lg shadow-lg border border-brand-stone border-opacity-20 flex flex-col justify-between';
+                // Add Card (Rustic Theme)
+                const card = document.createElement('div');
+                card.className = "bg-white p-6 rounded-lg shadow-md border border-brand-stone border-opacity-30 hover:shadow-xl transition transform hover:-translate-y-1";
+                card.innerHTML = `
+                    <h3 class="text-xl font-bold text-brand-forest">${doc.name}</h3>
+                    <p class="text-brand-golden font-bold text-xs uppercase tracking-wider mb-2">${doc.specialty}</p>
+                    <p class="text-brand-olive text-sm mb-1 h-10 overflow-hidden text-ellipsis">${doc.address}</p>
+                    <p class="text-gray-400 text-xs mb-4">📞 ${doc.phone}</p>
                     
-                    card.innerHTML = `
-                        <div>
-                            <h3 class="text-xl font-semibold text-brand-forest mb-2">${doctor.name}</h3>
-                            <!-- NEW: Golden accent for specialty -->
-                            <p class="text-brand-golden font-medium mb-3">${doctor.specialty}</p>
-                            <p class="text-brand-olive text-sm mb-2">${doctor.address}</p>
-                            <p class="text-brand-olive text-sm mb-4">${doctor.phone}</p>
-                        </div>
-                        <!-- NEW: Blue button (as requested) -->
-                        <a href="/book/${doctor.id}" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200 ease-in-out text-center">
-                            Book Appointment
-                        </a>
-                    `;
-                    doctorListEl.appendChild(card);
-                });
+                    <a href="/book/${doc.id}" class="block w-full text-center bg-brand-forest text-brand-cream py-2 rounded font-bold hover:bg-green-900 transition">
+                        Book Appointment
+                    </a>
+                `;
+                grid.appendChild(card);
+            });
 
-            } catch (error) {
-                console.error('Error loading doctors:', error);
-                loadingDoctorsEl.textContent = 'Error loading doctors. Please try again.';
-                loadingDoctorsEl.classList.add('text-red-500');
+            // Auto-center map if we have markers
+            if (markers.length > 0) {
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds().pad(0.1));
             }
-        }
 
-        // Initial load
-        loadDoctors();
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('loading').innerHTML = `<p class="text-red-600">Failed to load data.</p>`;
+        }
     });
 </script>
 {% endblock %}

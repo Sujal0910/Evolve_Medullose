@@ -3,23 +3,18 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<!-- NEW: Light-mode container -->
 <div class="container mx-auto max-w-4xl p-4 md:p-8 lg:p-12">
-    <!-- NEW: Re-skinned heading -->
     <h1 class="text-3xl font-bold text-brand-forest mb-8">My Appointments</h1>
 
-    <!-- NEW: Re-skinned white card -->
     <div class="bg-white p-6 rounded-lg shadow-lg border border-brand-stone border-opacity-20">
         
         {% if appointments %}
             <div class="space-y-6">
                 {% for appt in appointments %}
-                    <!-- NEW: Re-skinned appointment item -->
-                    <div class="bg-brand-cream p-4 rounded-lg flex flex-col sm:flex-row justify-between sm:items-center shadow-md">
-                        <div>
-                            <!-- NEW: Re-skinned text -->
+                    <div class="bg-brand-cream p-4 rounded-lg flex flex-col md:flex-row justify-between md:items-center shadow-md">
+                        
+                        <div class="mb-4 md:mb-0">
                             <h3 class="text-xl font-semibold text-brand-forest">Dr. {{ appt.doctor.name }}</h3>
-                            <!-- NEW: Golden specialty text -->
                             <p class="text-brand-golden font-medium mb-2">{{ appt.doctor.specialty }}</p>
                             
                             <p class="text-brand-olive">
@@ -35,25 +30,32 @@
                             {% endif %}
                         </div>
                         
-                        <!-- Cancel Button Form -->
-                        <form method="POST" action="{{ url_for('cancel_appointment', appointment_id=appt.id) }}" class="mt-4 sm:mt-0">
-                            <!-- NEW: Red signal button (as requested) -->
-                            <button type="submit" 
-                                    class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200 ease-in-out"
-                                    onclick="return confirm('Are you sure you want to cancel this appointment?');">
-                                Cancel
-                            </button>
-                        </form>
+                        <div class="flex items-center space-x-3">
+                            
+                            <a href="{{ url_for('video_consultation', room='Appointment-' ~ appt.id) }}" 
+                               class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200">
+                               📹 Join Video
+                            </a>
+
+                            <form method="POST" action="{{ url_for('cancel_appointment', appointment_id=appt.id) }}">
+                                <button type="submit" 
+                                        class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200"
+                                        onclick="return confirm('Are you sure you want to cancel this appointment?');">
+                                    Cancel
+                                </button>
+                            </form>
+                        </div>
+
                     </div>
                 {% endfor %}
             </div>
         {% else %}
-            <!-- This shows if the user has no appointments -->
-            <p class="text-brand-olive">You have no upcoming appointments.</p>
-            <!-- NEW: Blue button (as requested) -->
-            <a href="{{ url_for('find_doctors') }}" class="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200 ease-in-out">
-                Find a Doctor
-            </a>
+            <div class="text-center py-8">
+                <p class="text-brand-olive mb-4">You have no upcoming appointments.</p>
+                <a href="{{ url_for('find_doctors') }}" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200">
+                    Find a Doctor
+                </a>
+            </div>
         {% endif %}
     </div>
 </div>
