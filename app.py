@@ -955,6 +955,19 @@ def doctor_dashboard(doctor_id):
     appointments = Appointment.query.filter_by(doctor_id=doctor_id).order_by(Appointment.appointment_datetime).all()
     
     return render_template('doctor_dashboard.html', title=f'Dr. {doctor.name} - Dashboard', doctor=doctor, appointments=appointments)
+from sqlalchemy import text
+
+@app.route('/fix_database')
+def fix_database():
+    try:
+        # This SQL command manually adds the missing column to your PostgreSQL database
+        db.session.execute(text("ALTER TABLE appointment ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Scheduled';"))
+        db.session.commit()
+        return "<h1>Success!</h1><p>The 'status' column has been added to the Appointment table. You can now use the app.</p>"
+    except Exception as e:
+        db.session.rollback()
+        return f"<h1>Error</h1><p>{str(e)}</p>"
+
 # --- Main Run ---
 if __name__ == '__main__':
     app.run(debug=True)
