@@ -464,7 +464,7 @@ def article_detail(article_id):
 def get_openrouter_response(messages):
     try:
         completion = client.chat.completions.create(
-            model="google/gemma-3n-e2b-it:free", # Using the requested model
+            model="qwen/qwen3-vl-30b-a3b-thinking", # Using the requested model
             messages=messages,
             max_tokens=1024,
             extra_headers={
