@@ -5,7 +5,7 @@ PROJECT NAME-MEDULLOSE
 
 The application is deployed and live! You can access it using the link below:
 
-**🔗 [Evolve Medullose - Live App]((https://medullose.onrender.com/))**
+**🔗 [Evolve Medullose - Live App](https://medullose.onrender.com/)**
 PROBLEM STATEMENT/TRACK- AGRICULTURE AND HEALTH SUSTAINIBILITY
 TRACK 3 
 TEAM MEMBERS
